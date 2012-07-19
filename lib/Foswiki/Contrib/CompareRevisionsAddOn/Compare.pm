@@ -343,11 +343,6 @@ sub _getTree {
     my $tree = new HTML::TreeBuilder;
     $tree->implicit_body_p_tag(1);
     $tree->p_strict(1);
-    # Modac: always decode
-    if ( 1|| $Foswiki::cfg{UseLocale} ) {
-        require Encode;
-        $text = Encode::decode( $Foswiki::cfg{Site}{CharSet}, $text );
-    }
     $tree->parse($text);
     $tree->eof;
     $tree->elementify;
@@ -447,7 +442,7 @@ sub _findSubChanges {
 sub _elementHash {
 
     # Purpose: Stringify HTML ELement for comparison in Algorithm::Diff
-    my $text = ref( $_[0] ) eq $HTMLElement ? $_[0]->as_HTML : "$_[0]";
+    my $text = ref( $_[0] ) eq $HTMLElement ? $_[0]->as_HTML('<>&') : "$_[0]";
 
     # Strip leading & trailing blanks in text and paragraphs
     $text =~ s/^\s*//;
@@ -538,7 +533,7 @@ sub _getTextWithClass {
 
     if ( ref($element) eq $HTMLElement ) {
         _addClass( $element, $class ) if $class;
-        return $element->as_HTML( undef, undef, {} );
+        return $element->as_HTML( '<>&', undef, {} );
     }
     elsif ($class) {
         return '<span class="' . $class . '">' . $element . '</span>';
