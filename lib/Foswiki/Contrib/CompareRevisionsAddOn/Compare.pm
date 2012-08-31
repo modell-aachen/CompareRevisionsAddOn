@@ -127,6 +127,7 @@ sub compare {
     if ( $tree1 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree1 );
     }
+    $rev1 = $query->param('rev1') || ( Foswiki::Func::getRevisionInfo( $webName, $topic1 ) )[2];
     
     # Modac : END
 
