@@ -226,7 +226,7 @@ sub compare {
         if (   $action->[0] eq 'c'
             && ref( $action->[1] )    eq $HTMLElement
             && ref( $action->[2] )    eq $HTMLElement
-            && $action->[1]->starttag eq $action->[2]->starttag )
+            && $action->[1]->tag eq $action->[2]->tag )
         {
 
             my @sublist1 = $action->[1]->content_list;
