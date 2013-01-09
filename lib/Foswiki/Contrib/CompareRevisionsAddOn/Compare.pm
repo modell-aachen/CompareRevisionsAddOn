@@ -16,6 +16,10 @@ use warnings;
 use Foswiki::UI;
 use Foswiki::Func;
 use Foswiki::Plugins;
+use Foswiki::UI      ();
+use Foswiki::Func    ();
+use Foswiki::Plugins ();
+use Encode           ();
 
 use HTML::TreeBuilder;
 use Algorithm::Diff;
@@ -309,7 +313,10 @@ sub compare {
 
     $output .= $tmpl_after;
 
-# Break circular references to avoid memory leaks. (Tasks:9127)
+    # Item12337: part of alternative fix for Item11755
+    $output = Encode::encode( $Foswiki::cfg{Site}{CharSet}, $output );
+
+    # Break circular references to avoid memory leaks. (Tasks:9127)
     $tree1 = $tree1->parent() while defined $tree1->parent();
     $tree1->delete();
     $tree2 = $tree2->parent() while defined $tree2->parent();
@@ -338,6 +345,9 @@ sub _getTree {
 
     $text =~ s/^\s*//;
     $text =~ s/\s*$//;
+
+    # Item12337: part of alternative fix for Item11755
+    $text = Encode::decode( $Foswiki::cfg{Site}{CharSet}, $text );
 
     # Generate tree
 
