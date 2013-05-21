@@ -119,20 +119,20 @@ sub compare {
     
     if ( $query->param('external') ){
 
-	$topic1 = $query->param('external') || $topic;
-    	
-    	unless ( Foswiki::Func::topicExists( $webName, $topic1 ) ) {
-        	Foswiki::Func::redirectCgiQuery( $query,
-            	Foswiki::Func::getOopsUrl( $webName, $topic, 'oopsmissing' ) );
-    	}
+        $topic1 = $query->param('external') || $topic;
+
+        unless ( Foswiki::Func::topicExists( $webName, $topic1 ) ) {
+            Foswiki::Func::redirectCgiQuery( $query,
+                Foswiki::Func::getOopsUrl( $webName, $topic, 'oopsmissing' ) );
+        }
+        $rev1 = ( Foswiki::Func::getRevisionInfo( $webName, $topic1 ) )[2];
     }
 
     my $tree1 = _getTree( $session, $webName, $topic1, $rev1 );
     if ( $tree1 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree1 );
     }
-    $rev1 = $query->param('rev1') || ( Foswiki::Func::getRevisionInfo( $webName, $topic1 ) )[2];
-    
+
     # Modac : END
 
     # Reset the skin
