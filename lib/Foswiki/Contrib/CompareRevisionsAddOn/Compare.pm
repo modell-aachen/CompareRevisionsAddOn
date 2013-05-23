@@ -343,6 +343,7 @@ sub _getTree {
       Foswiki::Func::readTopic( $webName, $topicName, $rev );
     $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
     $text .= "\n" . '%META{"form"}%';
+    $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing when form got added
     $text .= "\n" . '%META{"attachments"}%';
 
     $session->enterContext( 'can_render_meta', $meta );
