@@ -408,7 +408,9 @@ sub _findSubChanges {
     my @list1 = $e1->content_list;
     my @list2 = $e2->content_list;
 
-    if ( @list1 && @list2 ) {    # Two non-empty lists
+    if ( ( @list1 && @list2 ) || $e1->tag eq 'td' ) {    # Two non-empty lists
+                                                         # But always prevent
+                                                         # interweaving <td>
         die "Huch!:" . $e1->tag . "!=" . $e2->tag
           if $e1->tag ne $e2->tag;
         $text1 = $e1->starttag;
