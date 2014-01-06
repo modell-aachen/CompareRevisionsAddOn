@@ -23,7 +23,6 @@ use Encode           ();
 
 use HTML::TreeBuilder;
 use Algorithm::Diff;
-use Data::Dumper;
 
 my $HTMLElement = 'HTML::Element';
 my $class_add   = 'craCompareAdd';
