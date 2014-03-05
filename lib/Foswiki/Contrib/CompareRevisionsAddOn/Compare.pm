@@ -340,6 +340,10 @@ sub _getTree {
 
     my ( $meta, $text ) =
       Foswiki::Func::readTopic( $webName, $topicName, $rev );
+
+    # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
+    $text =~ s#style=("|')([^$1]*[^$1;])$1#style=$1$2;$1#g;
+
     $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
     $text .= "\n" . '%META{"form"}%';
     $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing when form got added
