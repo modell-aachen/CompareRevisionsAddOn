@@ -34,6 +34,8 @@ $RELEASE = '31 Jul 2010';
 # Name of this Plugin, only used in this module
 $pluginName = 'CompareRevisionsAddonPlugin';
 
+our $NO_PREFS_IN_TOPIC = 1;
+
 sub initPlugin {
     my ( $topic, $web, $user, $installWeb ) = @_;
 
