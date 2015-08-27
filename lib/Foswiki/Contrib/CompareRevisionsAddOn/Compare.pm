@@ -263,10 +263,6 @@ sub compare {
 
     }
 
-    # Item12337: part of alternative fix for Item11755
-    my $charset = $Foswiki::cfg{Site}{CharSet} || 'iso-8859-1';
-    $output = Encode::encode( $charset, $output );
-
     # Item12423: include rest of template after recoding
     # (avoids double-encoding in header/footer)
     $output = $tmpl_before . $output;
@@ -356,9 +352,6 @@ sub _getTree {
 
     $text =~ s/^\s*//;
     $text =~ s/\s*$//;
-
-    # Item12337: part of alternative fix for Item11755
-    $text = Encode::decode( $Foswiki::cfg{Site}{CharSet}, $text );
 
     # Generate tree
 
