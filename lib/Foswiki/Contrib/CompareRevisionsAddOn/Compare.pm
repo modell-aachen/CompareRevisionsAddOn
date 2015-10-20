@@ -358,6 +358,7 @@ sub _getTree {
     my $tree = new HTML::TreeBuilder;
     $tree->implicit_body_p_tag(1);
     $tree->p_strict(1);
+    $tree->ignore_unknown(0);
     $tree->parse($text);
     $tree->eof;
     $tree->elementify;
@@ -400,6 +401,12 @@ sub _findSubChanges {
         $text2 = _getTextWithClass( $e2, $class_c2 );
         return $interweave ? ( $text1 . $text2, '' ) : ( $text1, $text2 );
 
+    }
+
+    if ($e1->tag eq 'svg') {
+        $text1 = _getTextWithClass( $e1, $class_c1 );
+        $text2 = _getTextWithClass( $e2, $class_c2 );
+        return $interweave ? ( $text1 . $text2, '' ) : ( $text1, $text2 );
     }
 
     my @list1 = $e1->content_list;
