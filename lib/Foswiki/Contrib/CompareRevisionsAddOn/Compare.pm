@@ -353,6 +353,8 @@ sub _getTree {
     $text =~ s/^\s*//;
     $text =~ s/\s*$//;
 
+    $text =~ s/<\/?nop>//g;
+
     # Generate tree
 
     my $tree = new HTML::TreeBuilder;
