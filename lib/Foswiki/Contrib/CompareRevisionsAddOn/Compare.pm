@@ -477,6 +477,9 @@ sub _elementHash {
     # Ignore different tables for sorting
     $text =~ s%(\<a href="$scripturl[^"]*sortcol=\d+(\&|\&amp;))table=\d+%$1%g;
 
+    # Do not mark as change, when a table row becomes odd/even or sorting changed
+    $text =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+
     return $text;
 }
 
