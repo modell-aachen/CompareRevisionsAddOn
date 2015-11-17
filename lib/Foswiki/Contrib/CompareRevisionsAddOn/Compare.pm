@@ -348,8 +348,10 @@ sub _getTree {
     $text .= "\n" . '%META{"attachments"}%';
 
     $session->enterContext( 'can_render_meta', $meta );
+    Foswiki::Func::setPreferencesValue('rev', $rev);
     $text = Foswiki::Func::expandCommonVariables( $text, $topicName, $webName, $meta );
     $text = Foswiki::Func::renderText( $text, $webName );
+    Foswiki::Func::setPreferencesValue('rev', undef);
 
     $text =~ s/^\s*//;
     $text =~ s/\s*$//;
