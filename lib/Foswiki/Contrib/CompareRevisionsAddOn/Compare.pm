@@ -88,7 +88,8 @@ sub compare {
     # are not rendered with twisty tables
 
     my $savedskin = $query->param('skin');
-    $query->param( 'skin', 'classic' );
+    my $compareSkin = $Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{skin} || 'classic';
+    $query->param( 'skin', $compareSkin );
 
     # Get the HTML trees of the specified versions
 
