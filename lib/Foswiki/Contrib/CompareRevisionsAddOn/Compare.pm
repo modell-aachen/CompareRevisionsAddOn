@@ -491,7 +491,13 @@ sub _addClass {
 
     my ( $element, $class ) = @_;
 
-    $element->attr( 'class', $class );
+    my $elementClass = $element->attr( 'class' );
+    if($elementClass) {
+        $elementClass .= " $class";
+    } else {
+        $elementClass = $class;
+    }
+    $element->attr( 'class', $elementClass );
 
     foreach my $subelement ( $element->content_list ) {
         _addClass( $subelement, $class ) if ref($subelement) eq $HTMLElement;
