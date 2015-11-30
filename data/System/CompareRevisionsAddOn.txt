@@ -112,6 +112,10 @@ In the default templates files from the distribution, the classes
 a light red background and stroken out text, and ==twikiCompareDelete== 
 and ==twikiCompareChange2== are defined with a light green background.
 
+---+++ Skin options
+
+By default the page will be rendered in _classic_ skin, so attachment tables and form definitions will have no twisties etc. However you can set the skin in confgure under ={Extensions}{CompareRevisionsAddOn}{skin}=.
+
 
 ---++ Add-On Installation Instructions
 

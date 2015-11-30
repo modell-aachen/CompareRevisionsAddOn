@@ -9,4 +9,8 @@ $Foswiki::cfg{SwitchBoard}{compare} = {
                   comparing => 1
                 },
     };
+# **STRING**
+# Define the skin to render the topic contents.
+$Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{skin} = 'classic';
+
 1;

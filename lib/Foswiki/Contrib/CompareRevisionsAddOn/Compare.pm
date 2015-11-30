@@ -88,7 +88,8 @@ sub compare {
     # are not rendered with twisty tables
 
     my $savedskin = $query->param('skin');
-    $query->param( 'skin', 'classic' );
+    my $compareSkin = $Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{skin} || 'classic';
+    $query->param( 'skin', $compareSkin );
 
     # Get the HTML trees of the specified versions
 
@@ -347,11 +348,15 @@ sub _getTree {
     $text .= "\n" . '%META{"attachments"}%';
 
     $session->enterContext( 'can_render_meta', $meta );
+    Foswiki::Func::setPreferencesValue('rev', $rev);
     $text = Foswiki::Func::expandCommonVariables( $text, $topicName, $webName, $meta );
     $text = Foswiki::Func::renderText( $text, $webName );
+    Foswiki::Func::setPreferencesValue('rev', undef);
 
     $text =~ s/^\s*//;
     $text =~ s/\s*$//;
+
+    $text =~ s/<\/?nop>//g;
 
     # Generate tree
 
@@ -477,6 +482,9 @@ sub _elementHash {
     # Ignore different tables for sorting
     $text =~ s%(\<a href="$scripturl[^"]*sortcol=\d+(\&|\&amp;))table=\d+%$1%g;
 
+    # Do not mark as change, when a table row becomes odd/even or sorting changed
+    $text =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+
     return $text;
 }
 
@@ -486,7 +494,13 @@ sub _addClass {
 
     my ( $element, $class ) = @_;
 
-    $element->attr( 'class', $class );
+    my $elementClass = $element->attr( 'class' );
+    if($elementClass) {
+        $elementClass .= " $class";
+    } else {
+        $elementClass = $class;
+    }
+    $element->attr( 'class', $elementClass );
 
     foreach my $subelement ( $element->content_list ) {
         _addClass( $subelement, $class ) if ref($subelement) eq $HTMLElement;
