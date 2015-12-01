@@ -67,20 +67,22 @@ sub compare {
     # Get Revisions. rev2 default to maxrev, rev1 to rev2-1
 
     my $maxrev = ( Foswiki::Func::getRevisionInfo( $webName, $topic ) )[2];
-    my $rev2 = $query->param('rev2') || $maxrev;
+    my $rev2 = $query->param('rev2');
+    $rev2 = $maxrev unless defined $rev2 && $rev2 ne '';
     $rev2 =~ s/^1\.// if $rev2;
 
     # Fix for Codev.SecurityAlertExecuteCommandsWithRev
     $rev2 = $maxrev unless ( $rev2 =~ s/.*?([0-9]+).*/$1/o );
     $rev2 = $maxrev if $rev2 > $maxrev;
-    $rev2 = 1       if $rev2 < 1;
-    my $rev1 = $query->param('rev1') || $rev2 - 1;
+    $rev2 = 0       if $rev2 < 0;
+    my $rev1 = $query->param('rev1');
+    $rev1 = $rev2 - 1 unless defined $rev1 && $rev1 ne '';
     $rev1 =~ s/^1\.// if $rev1;
 
     # Fix for Codev.SecurityAlertExecuteCommandsWithRev
     $rev1 = $maxrev unless ( $rev1 =~ s/.*?([0-9]+).*/$1/o );
     $rev1 = $maxrev if $rev1 > $maxrev;
-    $rev1 = 1       if $rev1 < 1;
+    $rev1 = 0       if $rev1 < 0;
 
     ( $rev1, $rev2 ) = ( $rev2, $rev1 ) if $rev1 > $rev2;
 
@@ -335,28 +337,33 @@ sub _getTree {
 
     # Read document
 
-    my ( $meta, $text ) =
-      Foswiki::Func::readTopic( $webName, $topicName, $rev );
+    my $text;
+    if($rev) {
+        ( my $meta, $text ) =
+          Foswiki::Func::readTopic( $webName, $topicName, $rev );
 
-    # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
-    $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
-    $text =~ s#style='([^']*[^';])'#style='$1;'#g;
+        # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
+        $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
+        $text =~ s#style='([^']*[^';])'#style='$1;'#g;
 
-    $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
-    $text .= "\n" . '%META{"form"}%';
-    $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing when form got added
-    $text .= "\n" . '%META{"attachments"}%';
+        $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
+        $text .= "\n" . '%META{"form"}%';
+        $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing when form got added
+        $text .= "\n" . '%META{"attachments"}%';
 
-    $session->enterContext( 'can_render_meta', $meta );
-    Foswiki::Func::setPreferencesValue('rev', $rev);
-    $text = Foswiki::Func::expandCommonVariables( $text, $topicName, $webName, $meta );
-    $text = Foswiki::Func::renderText( $text, $webName );
-    Foswiki::Func::setPreferencesValue('rev', undef);
+        $session->enterContext( 'can_render_meta', $meta );
+        Foswiki::Func::setPreferencesValue('rev', $rev);
+        $text = Foswiki::Func::expandCommonVariables( $text, $topicName, $webName, $meta );
+        $text = Foswiki::Func::renderText( $text, $webName );
+        Foswiki::Func::setPreferencesValue('rev', undef);
 
-    $text =~ s/^\s*//;
-    $text =~ s/\s*$//;
+        $text =~ s/^\s*//;
+        $text =~ s/\s*$//;
 
-    $text =~ s/<\/?nop>//g;
+        $text =~ s/<\/?nop>//g;
+    } else {
+        $text = '';
+    }
 
     # Generate tree
 
