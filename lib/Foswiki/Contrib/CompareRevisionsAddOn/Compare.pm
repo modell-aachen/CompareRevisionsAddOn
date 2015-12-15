@@ -19,10 +19,12 @@ use Foswiki::Plugins;
 use Foswiki::UI      ();
 use Foswiki::Func    ();
 use Foswiki::Plugins ();
+use Foswiki::Store;
 use Encode           ();
 
 use HTML::TreeBuilder;
 use Algorithm::Diff;
+use URI::Escape;
 
 my $HTMLElement = 'HTML::Element';
 my $class_add   = 'craCompareAdd';
@@ -41,6 +43,11 @@ sub compare {
     my $query   = $session->{request};
     my $webName = $session->{webName};
     my $topic   = $session->{topicName};
+
+    # workaround escapes for external: hilight newly uploaded files / unhilight 'external' having different ATTACHURL
+    # When there is no external parameter, these will be left undefined and no escaping will occur.
+    my $escapeExternal1;
+    my $escapeExternal2;
 
     unless ( Foswiki::Func::topicExists( $webName, $topic ) ) {
         Foswiki::Func::redirectCgiQuery( $query,
@@ -67,22 +74,42 @@ sub compare {
     # Get Revisions. rev2 default to maxrev, rev1 to rev2-1
 
     my $maxrev = ( Foswiki::Func::getRevisionInfo( $webName, $topic ) )[2];
-    my $rev2 = $query->param('rev2') || $maxrev;
+    my $rev2 = $query->param('rev2');
+    $rev2 = $maxrev unless defined $rev2 && $rev2 ne '';
     $rev2 =~ s/^1\.// if $rev2;
 
     # Fix for Codev.SecurityAlertExecuteCommandsWithRev
     $rev2 = $maxrev unless ( $rev2 =~ s/.*?([0-9]+).*/$1/o );
     $rev2 = $maxrev if $rev2 > $maxrev;
-    $rev2 = 1       if $rev2 < 1;
-    my $rev1 = $query->param('rev1') || $rev2 - 1;
+    $rev2 = 0       if $rev2 < 0;
+    my $rev1 = $query->param('rev1');
+    $rev1 = $rev2 - 1 unless defined $rev1 && $rev1 ne '';
     $rev1 =~ s/^1\.// if $rev1;
 
     # Fix for Codev.SecurityAlertExecuteCommandsWithRev
     $rev1 = $maxrev unless ( $rev1 =~ s/.*?([0-9]+).*/$1/o );
     $rev1 = $maxrev if $rev1 > $maxrev;
-    $rev1 = 1       if $rev1 < 1;
+    $rev1 = 0       if $rev1 < 0;
 
     ( $rev1, $rev2 ) = ( $rev2, $rev1 ) if $rev1 > $rev2;
+
+    # Modac : Extension - Compare with different Topic
+
+    my $topic1 = $topic;
+
+    if ( $query->param('external') ){
+
+        $topic1 = $query->param('external') || $topic;
+
+        unless ( Foswiki::Func::topicExists( $webName, $topic1 ) ) {
+            Foswiki::Func::redirectCgiQuery( $query,
+                Foswiki::Func::getOopsUrl( $webName, $topic, 'oopsmissing' ) );
+        }
+        $rev1 = ( Foswiki::Func::getRevisionInfo( $webName, $topic1 ) )[2];
+
+        $escapeExternal1 = {};
+        $escapeExternal2 = {};
+    }
 
     # Set skin temporarily to classic, so attachments and forms
     # are not rendered with twisty tables
@@ -93,7 +120,7 @@ sub compare {
 
     # Get the HTML trees of the specified versions
 
-    my $tree2 = _getTree( $session, $webName, $topic, $rev2 );
+    my $tree2 = _getTree( $session, $webName, $topic, $rev2, $escapeExternal2 );
     if ( $tree2 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree2 );
     }
@@ -112,23 +139,8 @@ sub compare {
             }
         }
     }
-    
-    # Modac : Extension - Compare with different Topic
-    
-    my $topic1 = $topic;
-    
-    if ( $query->param('external') ){
 
-        $topic1 = $query->param('external') || $topic;
-
-        unless ( Foswiki::Func::topicExists( $webName, $topic1 ) ) {
-            Foswiki::Func::redirectCgiQuery( $query,
-                Foswiki::Func::getOopsUrl( $webName, $topic, 'oopsmissing' ) );
-        }
-        $rev1 = ( Foswiki::Func::getRevisionInfo( $webName, $topic1 ) )[2];
-    }
-
-    my $tree1 = _getTree( $session, $webName, $topic1, $rev1 );
+    my $tree1 = _getTree( $session, $webName, $topic1, $rev1, $escapeExternal1 );
     if ( $tree1 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree1 );
     }
@@ -257,6 +269,14 @@ sub compare {
           : $action->[0] eq '+' ? $tmpl_a
           :                       $tmpl_d;
 
+        # unescape stuff
+        if($escapeExternal1 && $escapeExternal2) {
+            unescapeFile(\$text1, $escapeExternal1);
+            unescapeFile(\$text1, $escapeExternal2);
+            unescapeFile(\$text2, $escapeExternal2);
+            unescapeFile(\$text2, $escapeExternal1);
+        }
+
         # Do the replacement of %TEXT1% and %TEXT2% simultaneously
         # to prevent difficulties with text containing '%TEXT2%'
         $tmpl =~ s/%TEXT(1|2)%/$1==1?$text1:$text2/ge;
@@ -327,36 +347,100 @@ sub compare {
 
 }
 
+# Escapes links to attachments of the current topic.
+# The attachments timestamp will be added, so updated files will be hilighted.
+# Parameters:
+#    * $escapes: HashRef that will store the escaped links for unescapeFile
+#    * $meta: TopicObject of the current topic
+#    * $prefix: Stuff that is not part of the filename, but should be escaped (%ATTACHURLPATH%/)
+#    * $file: The attachments filename
+#    * $expand: if perl-true, the $prefix will be expanded
+sub escapeFile {
+    my ( $escapes, $meta, $prefix, $file, $expand ) = @_;
+
+    my $link = "$prefix$file";
+
+    my $fileUnescaped = uri_unescape( $file );
+    if( $fileUnescaped ne $file && $Foswiki::UNICODE ) {
+        $fileUnescaped = Foswiki::Store::decode( $fileUnescaped );
+    }
+
+    my $info = $meta->get( 'FILEATTACHMENT', $fileUnescaped );
+    return $link unless $info && $info->{date};
+
+    my $escape = "_CRAAttachmentEscpape_link=${file}_date=$info->{date}_";
+    $link = Foswiki::Func::expandCommonVariables($link, $meta->topic(), $meta->web(), $meta) if $expand;
+    $escapes->{$escape} = $link;
+
+    return $escape;
+}
+
+# Unescapes everything marked in $escape
+# Parameters:
+#    * $textRef: ref to the text to be unescaped
+#    * $escapes: HashRef produced by escapeFile
+sub unescapeFile {
+    my ( $textRef, $escapes ) = @_;
+
+    foreach my $escape ( keys %$escapes ) {
+        $$textRef =~ s#\Q$escape\E#$escapes->{$escape}#g;
+    }
+}
+
 sub _getTree {
 
     # Purpose: Get the rendered version of a document as HTML tree
 
-    my ( $session, $webName, $topicName, $rev ) = @_;
+    my ( $session, $webName, $topicName, $rev, $escapes ) = @_;
 
     # Read document
 
-    my ( $meta, $text ) =
-      Foswiki::Func::readTopic( $webName, $topicName, $rev );
+    my $text;
+    if($rev) {
+        ( my $meta, $text ) =
+          Foswiki::Func::readTopic( $webName, $topicName, $rev );
+        $session->enterContext( 'can_render_meta', $meta );
 
-    # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
-    $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
-    $text =~ s#style='([^']*[^';])'#style='$1;'#g;
+        # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
+        $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
+        $text =~ s#style='([^']*[^';])'#style='$1;'#g;
 
-    $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
-    $text .= "\n" . '%META{"form"}%';
-    $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing when form got added
-    $text .= "\n" . '%META{"attachments"}%';
+        if(defined $escapes) {
+            $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1)#ge;
+            $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1)#ge;
+        }
 
-    $session->enterContext( 'can_render_meta', $meta );
-    Foswiki::Func::setPreferencesValue('rev', $rev);
-    $text = Foswiki::Func::expandCommonVariables( $text, $topicName, $webName, $meta );
-    $text = Foswiki::Func::renderText( $text, $webName );
-    Foswiki::Func::setPreferencesValue('rev', undef);
+        $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
+        $text .= "\n" . '%META{"form"}%';
+        $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing when form got added
+        $text .= "\n" . '%META{"attachments"}%';
 
-    $text =~ s/^\s*//;
-    $text =~ s/\s*$//;
+        Foswiki::Func::setPreferencesValue('rev', $rev);
+        $text = Foswiki::Func::expandCommonVariables( $text, $topicName, $webName, $meta );
+        $text = Foswiki::Func::renderText( $text, $webName );
+        Foswiki::Func::setPreferencesValue('rev', undef);
 
-    $text =~ s/<\/?nop>//g;
+        if(defined $escapes) {
+            my $attachurl = Foswiki::Func::expandCommonVariables( '%ATTACHURL%', $topicName, $webName, $meta );
+            my $attachurlpath = Foswiki::Func::expandCommonVariables( '%ATTACHURLPATH%', $topicName, $webName, $meta );
+            $text =~ s#(?<=href=")((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2)#ge;
+            $text =~ s#(?<=href=')((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2)#ge;
+        }
+
+        $text =~ s/^\s*//;
+        $text =~ s/\s*$//;
+
+        $text =~ s/<\/?nop>//g;
+    } else {
+        $text = '';
+    }
+
+    # Modac: better SVG integration
+    # HTML::TreeBuilder fails to parse SVG (used in flowcharts) due to
+    # self-closing tags elements DEFS, RECT and PATH.
+    $text =~ s#(<defs[^</]*)(/>)#$1></defs>#g;
+    $text =~ s#(<rect[^</]*)(/>)#$1></rect>#g;
+    $text =~ s#(<path[^</]*)(/>)#$1></path>#g;
 
     # Generate tree
 
