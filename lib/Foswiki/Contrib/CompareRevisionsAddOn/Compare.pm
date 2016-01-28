@@ -46,8 +46,8 @@ sub compare {
 
     # workaround escapes for external: hilight newly uploaded files / unhilight 'external' having different ATTACHURL
     # When there is no external parameter, these will be left undefined and no escaping will occur.
-    my $escapeExternal1;
-    my $escapeExternal2;
+    my $escapeFileUrls1 = {};
+    my $escapeFileUrls2 = {};
 
     unless ( Foswiki::Func::topicExists( $webName, $topic ) ) {
         Foswiki::Func::redirectCgiQuery( $query,
@@ -107,8 +107,6 @@ sub compare {
         }
         $rev1 = ( Foswiki::Func::getRevisionInfo( $webName, $topic1 ) )[2];
 
-        $escapeExternal1 = {};
-        $escapeExternal2 = {};
     }
 
     # Set skin temporarily to classic, so attachments and forms
@@ -120,7 +118,7 @@ sub compare {
 
     # Get the HTML trees of the specified versions
 
-    my $tree2 = _getTree( $session, $webName, $topic, $rev2, $escapeExternal2 );
+    my $tree2 = _getTree( $session, $webName, $topic, $rev2, $escapeFileUrls2 );
     if ( $tree2 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree2 );
     }
@@ -140,7 +138,7 @@ sub compare {
         }
     }
 
-    my $tree1 = _getTree( $session, $webName, $topic1, $rev1, $escapeExternal1 );
+    my $tree1 = _getTree( $session, $webName, $topic1, $rev1, $escapeFileUrls1 );
     if ( $tree1 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree1 );
     }
@@ -270,12 +268,10 @@ sub compare {
           :                       $tmpl_d;
 
         # unescape stuff
-        if($escapeExternal1 && $escapeExternal2) {
-            unescapeFile(\$text1, $escapeExternal1);
-            unescapeFile(\$text1, $escapeExternal2);
-            unescapeFile(\$text2, $escapeExternal2);
-            unescapeFile(\$text2, $escapeExternal1);
-        }
+        unescapeFile(\$text1, $escapeFileUrls1);
+        unescapeFile(\$text1, $escapeFileUrls2);
+        unescapeFile(\$text2, $escapeFileUrls2);
+        unescapeFile(\$text2, $escapeFileUrls1);
 
         # Do the replacement of %TEXT1% and %TEXT2% simultaneously
         # to prevent difficulties with text containing '%TEXT2%'
@@ -405,10 +401,8 @@ sub _getTree {
         $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
         $text =~ s#style='([^']*[^';])'#style='$1;'#g;
 
-        if(defined $escapes) {
-            $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1)#ge;
-            $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1)#ge;
-        }
+        $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1)#ge;
+        $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1)#ge;
 
         $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
         $text .= "\n" . '%META{"form"}%';
