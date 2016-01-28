@@ -33,7 +33,6 @@ my $class_c1    = 'craCompareChange1';
 my $class_c2    = 'craCompareChange2';
 my $interweave;
 my $context;
-my $scripturl;
 
 sub compare {
     my $session = shift;
@@ -53,8 +52,6 @@ sub compare {
         Foswiki::Func::redirectCgiQuery( $query,
             Foswiki::Func::getOopsUrl( $webName, $topic, 'oopsmissing' ) );
     }
-
-    $scripturl = Foswiki::Func::getScriptUrl( $webName, $topic, 'compare' );
 
     # Check, if interweave or sidebyside
 
@@ -495,7 +492,7 @@ sub _findSubChanges {
     my @list1 = $e1->content_list;
     my @list2 = $e2->content_list;
 
-    if ( ( @list1 && @list2 ) || $e1->tag eq 'td' ) {    # Two non-empty lists
+    if ( ( @list1 && @list2 && _haveSameAttribs($e1, $e2) ) || $e1->tag eq 'td' ) {    # Two non-empty lists
                                                          # But always prevent
                                                          # interweaving <td>
         die "Huch!:" . $e1->tag . "!=" . $e2->tag
@@ -546,6 +543,40 @@ sub _findSubChanges {
     return ( $text1 || '', $text2 || '' );
 }
 
+# check if elements have same attributes
+sub _haveSameAttribs {
+    my ($e1, $e2) = @_;
+    if(scalar $e1->all_attr_names() != scalar $e2->all_attr_names()) {
+        return 0;
+    } else {
+        foreach my $attr($e1->all_attr_names()) {
+            next if ($attr =~ m#^_#); # _parent, _tag, ...
+
+            my $attrOfE2 = $e2->attr($attr);
+            return 0 if not defined $attrOfE2;
+            my $attrOfE1 = $e1->attr($attr);
+
+            # Ignore different tables for sorting
+            # XXX dublicated in _elementHash
+            if($attr eq 'href') {
+                $attrOfE1 =~ s%^(.*sortcol=\d+(?:\&|\&amp;|;))table=\d+%$1%;
+                $attrOfE2 =~ s%^(.*sortcol=\d+(?:\&|\&amp;|;))table=\d+%$1%;
+            }
+
+            # Do not mark as change, when a table row becomes odd/even or sorting changed
+            # XXX dublicated in _elementHash
+            if($attr eq 'class') {
+                $attrOfE1 =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+                $attrOfE2 =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+            }
+
+            return 0 if $attrOfE1 ne $attrOfE2;
+        }
+    }
+
+    return 1;
+}
+
 sub _elementHash {
 
     # Purpose: Stringify HTML ELement for comparison in Algorithm::Diff
@@ -558,9 +589,11 @@ sub _elementHash {
     $text =~ s|\s+(\<\/p\>)|$1|g;
 
     # Ignore different tables for sorting
-    $text =~ s%(\<a href="$scripturl[^"]*sortcol=\d+(\&|\&amp;))table=\d+%$1%g;
+    # XXX dublicated in _haveSameAttribs
+    $text =~ s%(\<a href="[^"]*sortcol=\d+(?:\&|\&amp;|;))table=\d+%$1%g;
 
     # Do not mark as change, when a table row becomes odd/even or sorting changed
+    # XXX dublicated in _haveSameAttribs
     $text =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
 
     return $text;
