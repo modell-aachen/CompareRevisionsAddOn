@@ -353,8 +353,11 @@ sub escapeFile {
 
     my $link = "$prefix$file";
 
-    my $fileUnescaped = uri_unescape( $file );
-    if( $fileUnescaped ne $file && $Foswiki::UNICODE ) {
+    my $fileName = $file;
+    $fileName =~ s#\?.*##;
+
+    my $fileUnescaped = uri_unescape( $fileName );
+    if( $fileUnescaped ne $fileName && $Foswiki::UNICODE ) {
         $fileUnescaped = Foswiki::Store::decode( $fileUnescaped );
     }
 
