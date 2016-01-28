@@ -349,7 +349,7 @@ sub compare {
 #    * $file: The attachments filename
 #    * $expand: if perl-true, the $prefix will be expanded
 sub escapeFile {
-    my ( $escapes, $meta, $prefix, $file, $expand ) = @_;
+    my ( $escapes, $meta, $prefix, $file, $expand, $currentMeta ) = @_;
 
     my $link = "$prefix$file";
 
@@ -361,6 +361,8 @@ sub escapeFile {
         $fileUnescaped = Foswiki::Store::decode( $fileUnescaped );
     }
 
+    # File info in this version
+    my $currentInfo = $currentMeta->get( 'FILEATTACHMENT', $fileUnescaped );
 
     my $info;
     # remove any rev=<.*> params, since we take care of that
@@ -383,7 +385,19 @@ sub escapeFile {
 
     my $escape = uri_escape("_CRAAttachmentEscape_link=${file}_date=$info->{date}_");
     $link = Foswiki::Func::expandCommonVariables($link, $meta->topic(), $meta->web(), $meta) if $expand;
-    if (defined $info->{version}) {
+    if(not (defined $currentInfo && defined $currentInfo->{date})) {
+        # attachment has been deleted, show a placeholder
+        my $placeholders = $Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{placeholders};
+        my $placeholder;
+        foreach my $regex ( keys %$placeholders ) {
+            if($fileUnescaped =~ m#$regex#) {
+                $placeholder = $placeholders->{$regex};
+                last;
+            }
+        }
+        $placeholder = Foswiki::Func::expandCommonVariables($placeholder, $meta->topic(), $meta->web(), $meta) if $placeholder;
+        $link = $placeholder if $placeholder;
+    } elsif (defined $info->{version}) {
         if($link =~ m#\?#) {
             if($link =~ m#\?.*?(;|&)#) {
                 $link .= $1;
@@ -420,6 +434,8 @@ sub _getTree {
 
     # Read document
 
+    ( my $currentMeta, undef ) = Foswiki::Func::readTopic( $webName, $topicName ); # to check if attachments still available
+
     my $text;
     if($rev) {
         ( my $meta, $text ) =
@@ -430,8 +446,8 @@ sub _getTree {
         $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
         $text =~ s#style='([^']*[^';])'#style='$1;'#g;
 
-        $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1)#ge;
-        $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1)#ge;
+        $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1, $currentMeta)#ge;
+        $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1, $currentMeta)#ge;
 
         $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
         $text .= "\n" . '%META{"form"}%';
@@ -446,8 +462,8 @@ sub _getTree {
         if(defined $escapes) {
             my $attachurl = Foswiki::Func::expandCommonVariables( '%ATTACHURL%', $topicName, $webName, $meta );
             my $attachurlpath = Foswiki::Func::expandCommonVariables( '%ATTACHURLPATH%', $topicName, $webName, $meta );
-            $text =~ s#(?<=href=")((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2)#ge;
-            $text =~ s#(?<=href=')((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2)#ge;
+            $text =~ s#(?<=href=")((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 0, $currentMeta)#ge;
+            $text =~ s#(?<=href=')((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 0, $currentMeta)#ge;
         }
 
         $text =~ s/^\s*//;
