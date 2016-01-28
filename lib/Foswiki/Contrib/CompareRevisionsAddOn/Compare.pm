@@ -364,7 +364,7 @@ sub escapeFile {
     my $info = $meta->get( 'FILEATTACHMENT', $fileUnescaped );
     return $link unless $info && $info->{date};
 
-    my $escape = "_CRAAttachmentEscpape_link=${file}_date=$info->{date}_";
+    my $escape = uri_escape("_CRAAttachmentEscape_link=${file}_date=$info->{date}_");
     $link = Foswiki::Func::expandCommonVariables($link, $meta->topic(), $meta->web(), $meta) if $expand;
     $escapes->{$escape} = $link;
 
