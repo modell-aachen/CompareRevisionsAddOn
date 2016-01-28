@@ -361,11 +361,40 @@ sub escapeFile {
         $fileUnescaped = Foswiki::Store::decode( $fileUnescaped );
     }
 
-    my $info = $meta->get( 'FILEATTACHMENT', $fileUnescaped );
-    return $link unless $info && $info->{date};
+
+    my $info;
+    # remove any rev=<.*> params, since we take care of that
+    # load correct info
+    if ($file =~ s#(\?.*?(?:&|;))rev=(.*)#$1#) {
+        my $rev = $2;
+        return $link unless $rev =~ m#^\d*$#; # malformed rev param
+
+        # stay at current version if rev=0 or rev=<empty>
+        if($rev) {
+            # we got a valid rev-param, load this version
+            $info = $meta->getRevisionInfo($fileUnescaped, $rev);
+        }
+    }
+    # no (valid) rev param, load info of this version
+    $info = $meta->get( 'FILEATTACHMENT', $fileUnescaped ) unless defined $info;
+
+    # if file was deleted: dummy data
+    $info = { date => 0, version => 0 } unless $info && $info->{date};
 
     my $escape = uri_escape("_CRAAttachmentEscape_link=${file}_date=$info->{date}_");
     $link = Foswiki::Func::expandCommonVariables($link, $meta->topic(), $meta->web(), $meta) if $expand;
+    if (defined $info->{version}) {
+        if($link =~ m#\?#) {
+            if($link =~ m#\?.*?(;|&)#) {
+                $link .= $1;
+            } else {
+                $link .= '&';
+            }
+        } else {
+            $link .= '?';
+        }
+        $link .= "rev=$info->{version}";
+    }
     $escapes->{$escape} = $link;
 
     return $escape;
