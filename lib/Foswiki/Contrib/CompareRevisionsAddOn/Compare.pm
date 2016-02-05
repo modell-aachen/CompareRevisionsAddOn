@@ -383,7 +383,7 @@ sub escapeFile {
     # if file was deleted: dummy data
     $info = { date => 0, version => 0 } unless $info && $info->{date};
 
-    my $escape = uri_escape("_CRAAttachmentEscape_link=${file}_date=$info->{date}_");
+    my $escape = uri_escape_utf8("_CRAAttachmentEscape_link=${file}_date=$info->{date}_");
     $link = Foswiki::Func::expandCommonVariables($link, $meta->topic(), $meta->web(), $meta) if $expand;
     if(not (defined $currentInfo && defined $currentInfo->{date})) {
         # attachment has been deleted, show a placeholder
