@@ -728,9 +728,27 @@ sub _getTextWithClass {
 
     my ( $element, $class ) = @_;
 
+    my $rand;
+
     if ( ref($element) eq $HTMLElement ) {
         _addClass( $element, $class ) if $class;
-        return $element->as_HTML( '<>&', undef, {} );
+
+        # unfortunately HTML::Tree messes up when there are quotes in the class
+        # and &quot; gets convertet to regular quotes. Thus we need to escape
+        # them here and restore in the finished html.
+        foreach my $e ( $element->look_down('class', qr/"/) ) {
+            $rand = rand() unless defined $rand;
+            my $elementClass = $e->attr('class');
+            $elementClass =~ s#"#quoteescapedeluxe$rand#g;
+            $e->attr('class', $elementClass);
+        }
+
+        my $text = $element->as_HTML( '<>&', undef, {} );
+
+        # restore quotes
+        $text =~ s#quoteescapedeluxe$rand#&quot;#g if defined $rand;
+
+        return $text;
     }
     elsif ($class) {
         return '<span class="' . $class . '">' . $element . '</span>';
