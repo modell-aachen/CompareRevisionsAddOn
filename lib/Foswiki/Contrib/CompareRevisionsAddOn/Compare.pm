@@ -33,7 +33,6 @@ my $class_c1    = 'craCompareChange1';
 my $class_c2    = 'craCompareChange2';
 my $interweave;
 my $context;
-my $scripturl;
 
 sub compare {
     my $session = shift;
@@ -46,15 +45,13 @@ sub compare {
 
     # workaround escapes for external: hilight newly uploaded files / unhilight 'external' having different ATTACHURL
     # When there is no external parameter, these will be left undefined and no escaping will occur.
-    my $escapeExternal1;
-    my $escapeExternal2;
+    my $escapeFileUrls1 = {};
+    my $escapeFileUrls2 = {};
 
     unless ( Foswiki::Func::topicExists( $webName, $topic ) ) {
         Foswiki::Func::redirectCgiQuery( $query,
             Foswiki::Func::getOopsUrl( $webName, $topic, 'oopsmissing' ) );
     }
-
-    $scripturl = Foswiki::Func::getScriptUrl( $webName, $topic, 'compare' );
 
     # Check, if interweave or sidebyside
 
@@ -107,8 +104,6 @@ sub compare {
         }
         $rev1 = ( Foswiki::Func::getRevisionInfo( $webName, $topic1 ) )[2];
 
-        $escapeExternal1 = {};
-        $escapeExternal2 = {};
     }
 
     # Set skin temporarily to classic, so attachments and forms
@@ -120,7 +115,7 @@ sub compare {
 
     # Get the HTML trees of the specified versions
 
-    my $tree2 = _getTree( $session, $webName, $topic, $rev2, $escapeExternal2 );
+    my $tree2 = _getTree( $session, $webName, $topic, $rev2, $escapeFileUrls2 );
     if ( $tree2 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree2 );
     }
@@ -140,7 +135,7 @@ sub compare {
         }
     }
 
-    my $tree1 = _getTree( $session, $webName, $topic1, $rev1, $escapeExternal1 );
+    my $tree1 = _getTree( $session, $webName, $topic1, $rev1, $escapeFileUrls1 );
     if ( $tree1 =~ /^http:.*oops/ ) {
         Foswiki::Func::redirectCgiQuery( $query, $tree1 );
     }
@@ -270,12 +265,10 @@ sub compare {
           :                       $tmpl_d;
 
         # unescape stuff
-        if($escapeExternal1 && $escapeExternal2) {
-            unescapeFile(\$text1, $escapeExternal1);
-            unescapeFile(\$text1, $escapeExternal2);
-            unescapeFile(\$text2, $escapeExternal2);
-            unescapeFile(\$text2, $escapeExternal1);
-        }
+        unescapeFile(\$text1, $escapeFileUrls1);
+        unescapeFile(\$text1, $escapeFileUrls2);
+        unescapeFile(\$text2, $escapeFileUrls2);
+        unescapeFile(\$text2, $escapeFileUrls1);
 
         # Do the replacement of %TEXT1% and %TEXT2% simultaneously
         # to prevent difficulties with text containing '%TEXT2%'
@@ -356,20 +349,66 @@ sub compare {
 #    * $file: The attachments filename
 #    * $expand: if perl-true, the $prefix will be expanded
 sub escapeFile {
-    my ( $escapes, $meta, $prefix, $file, $expand ) = @_;
+    my ( $escapes, $meta, $prefix, $file, $expand, $currentMeta ) = @_;
 
     my $link = "$prefix$file";
 
-    my $fileUnescaped = uri_unescape( $file );
-    if( $fileUnescaped ne $file && $Foswiki::UNICODE ) {
+    my $fileName = $file;
+    $fileName =~ s#\?.*##;
+
+    my $fileUnescaped = uri_unescape( $fileName );
+    if( $fileUnescaped ne $fileName && $Foswiki::UNICODE ) {
         $fileUnescaped = Foswiki::Store::decode( $fileUnescaped );
     }
 
-    my $info = $meta->get( 'FILEATTACHMENT', $fileUnescaped );
-    return $link unless $info && $info->{date};
+    # File info in this version
+    my $currentInfo = $currentMeta->get( 'FILEATTACHMENT', $fileUnescaped );
 
-    my $escape = "_CRAAttachmentEscpape_link=${file}_date=$info->{date}_";
+    my $info;
+    # remove any rev=<.*> params, since we take care of that
+    # load correct info
+    if ($file =~ s#(\?.*?(?:&|;))rev=(.*)#$1#) {
+        my $rev = $2;
+        return $link unless $rev =~ m#^\d*$#; # malformed rev param
+
+        # stay at current version if rev=0 or rev=<empty>
+        if($rev) {
+            # we got a valid rev-param, load this version
+            $info = $meta->getRevisionInfo($fileUnescaped, $rev);
+        }
+    }
+    # no (valid) rev param, load info of this version
+    $info = $meta->get( 'FILEATTACHMENT', $fileUnescaped ) unless defined $info;
+
+    # if file was deleted: dummy data
+    $info = { date => 0, version => 0 } unless $info && $info->{date};
+
+    my $escape = uri_escape_utf8("_CRAAttachmentEscape_link=${file}_date=$info->{date}_");
     $link = Foswiki::Func::expandCommonVariables($link, $meta->topic(), $meta->web(), $meta) if $expand;
+    if(not (defined $currentInfo && defined $currentInfo->{date})) {
+        # attachment has been deleted, show a placeholder
+        my $placeholders = $Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{placeholders};
+        my $placeholder;
+        foreach my $regex ( keys %$placeholders ) {
+            if($fileUnescaped =~ m#$regex#) {
+                $placeholder = $placeholders->{$regex};
+                last;
+            }
+        }
+        $placeholder = Foswiki::Func::expandCommonVariables($placeholder, $meta->topic(), $meta->web(), $meta) if $placeholder;
+        $link = $placeholder if $placeholder;
+    } elsif (defined $info->{version}) {
+        if($link =~ m#\?#) {
+            if($link =~ m#\?.*?(;|&)#) {
+                $link .= $1;
+            } else {
+                $link .= '&';
+            }
+        } else {
+            $link .= '?';
+        }
+        $link .= "rev=$info->{version}";
+    }
     $escapes->{$escape} = $link;
 
     return $escape;
@@ -395,6 +434,8 @@ sub _getTree {
 
     # Read document
 
+    ( my $currentMeta, undef ) = Foswiki::Func::readTopic( $webName, $topicName ); # to check if attachments still available
+
     my $text;
     if($rev) {
         ( my $meta, $text ) =
@@ -405,10 +446,8 @@ sub _getTree {
         $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
         $text =~ s#style='([^']*[^';])'#style='$1;'#g;
 
-        if(defined $escapes) {
-            $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1)#ge;
-            $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1)#ge;
-        }
+        $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1, $currentMeta)#ge;
+        $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1, $currentMeta)#ge;
 
         $text .= "\n<div></div>"; # Modac: Insert node, to prevent collapsing with adjacent changes
         $text .= "\n" . '%META{"form"}%';
@@ -423,8 +462,8 @@ sub _getTree {
         if(defined $escapes) {
             my $attachurl = Foswiki::Func::expandCommonVariables( '%ATTACHURL%', $topicName, $webName, $meta );
             my $attachurlpath = Foswiki::Func::expandCommonVariables( '%ATTACHURLPATH%', $topicName, $webName, $meta );
-            $text =~ s#(?<=href=")((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2)#ge;
-            $text =~ s#(?<=href=')((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2)#ge;
+            $text =~ s#(?<=href=")((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 0, $currentMeta)#ge;
+            $text =~ s#(?<=href=')((?:\Q$attachurl\E|\Q$attachurlpath\E)/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 0, $currentMeta)#ge;
         }
 
         $text =~ s/^\s*//;
@@ -501,7 +540,7 @@ sub _findSubChanges {
     my @list1 = $e1->content_list;
     my @list2 = $e2->content_list;
 
-    if ( ( @list1 && @list2 ) || $e1->tag eq 'td' ) {    # Two non-empty lists
+    if ( ( @list1 && @list2 && _haveSameAttribs($e1, $e2) ) || $e1->tag eq 'td' ) {    # Two non-empty lists
                                                          # But always prevent
                                                          # interweaving <td>
         die "Huch!:" . $e1->tag . "!=" . $e2->tag
@@ -552,6 +591,40 @@ sub _findSubChanges {
     return ( $text1 || '', $text2 || '' );
 }
 
+# check if elements have same attributes
+sub _haveSameAttribs {
+    my ($e1, $e2) = @_;
+    if(scalar $e1->all_attr_names() != scalar $e2->all_attr_names()) {
+        return 0;
+    } else {
+        foreach my $attr($e1->all_attr_names()) {
+            next if ($attr =~ m#^_#); # _parent, _tag, ...
+
+            my $attrOfE2 = $e2->attr($attr);
+            return 0 if not defined $attrOfE2;
+            my $attrOfE1 = $e1->attr($attr);
+
+            # Ignore different tables for sorting
+            # XXX dublicated in _elementHash
+            if($attr eq 'href') {
+                $attrOfE1 =~ s%^(.*sortcol=\d+(?:\&|\&amp;|;))table=\d+%$1%;
+                $attrOfE2 =~ s%^(.*sortcol=\d+(?:\&|\&amp;|;))table=\d+%$1%;
+            }
+
+            # Do not mark as change, when a table row becomes odd/even or sorting changed
+            # XXX dublicated in _elementHash
+            if($attr eq 'class') {
+                $attrOfE1 =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+                $attrOfE2 =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+            }
+
+            return 0 if $attrOfE1 ne $attrOfE2;
+        }
+    }
+
+    return 1;
+}
+
 sub _elementHash {
 
     # Purpose: Stringify HTML ELement for comparison in Algorithm::Diff
@@ -564,9 +637,11 @@ sub _elementHash {
     $text =~ s|\s+(\<\/p\>)|$1|g;
 
     # Ignore different tables for sorting
-    $text =~ s%(\<a href="$scripturl[^"]*sortcol=\d+(\&|\&amp;))table=\d+%$1%g;
+    # XXX dublicated in _haveSameAttribs
+    $text =~ s%(\<a href="[^"]*sortcol=\d+(?:\&|\&amp;|;))table=\d+%$1%g;
 
     # Do not mark as change, when a table row becomes odd/even or sorting changed
+    # XXX dublicated in _haveSameAttribs
     $text =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
 
     return $text;
@@ -653,9 +728,27 @@ sub _getTextWithClass {
 
     my ( $element, $class ) = @_;
 
+    my $rand;
+
     if ( ref($element) eq $HTMLElement ) {
         _addClass( $element, $class ) if $class;
-        return $element->as_HTML( '<>&', undef, {} );
+
+        # unfortunately HTML::Tree messes up when there are quotes in the class
+        # and &quot; gets convertet to regular quotes. Thus we need to escape
+        # them here and restore in the finished html.
+        foreach my $e ( $element->look_down('class', qr/"/) ) {
+            $rand = rand() unless defined $rand;
+            my $elementClass = $e->attr('class');
+            $elementClass =~ s#"#quoteescapedeluxe$rand#g;
+            $e->attr('class', $elementClass);
+        }
+
+        my $text = $element->as_HTML( '<>&', undef, {} );
+
+        # restore quotes
+        $text =~ s#quoteescapedeluxe$rand#&quot;#g if defined $rand;
+
+        return $text;
     }
     elsif ($class) {
         return '<span class="' . $class . '">' . $element . '</span>';

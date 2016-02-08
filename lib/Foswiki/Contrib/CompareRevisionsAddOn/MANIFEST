@@ -9,6 +9,9 @@ lib/Foswiki/Contrib/CompareRevisionsAddOn/Compare.pm 0444
 lib/Foswiki/Contrib/CompareRevisionsAddOn/Config.spec 0444
 pub/System/CompareRevisionsAddOn/interweave.png 0644
 pub/System/CompareRevisionsAddOn/sidebyside.png 0644
+pub/System/CompareRevisionsAddOn/Keep_tidy_ask.svg 0644
+pub/System/CompareRevisionsAddOn/Keep_tidy_ask_en.svg 0644
+pub/System/CompareRevisionsAddOn/Keep_tidy_ask_de.svg 0644
 templates/compare.tmpl 0444
 templates/compareinterweave.tmpl 0444
 templates/comparesidebyside.tmpl 0444

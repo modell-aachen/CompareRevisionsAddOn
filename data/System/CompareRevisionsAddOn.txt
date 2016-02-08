@@ -158,8 +158,9 @@ __Note:__ You do not need to install anything on the browser to use this add-on.
    * Enable the helper plugin CompareRevisionsAddonPlugin with the configure script
    * This plugin will support the HistoryPlugin, if it is enabled
    * If you disable this plugin, the skin will behave like standard <nop>PatternSkin again
-   
-   
+
+---++ Additional ressources
+| [[%ATTACHURL%/Keep_tidy_ask.svg]] | !CleanBy unknown (original); User:Dhanak (JPEG version); User:Kyle the hacker (SVG version) [GFDL (http://www.gnu.org/copyleft/fdl.html) or CC BY-SA 3.0 (http://creativecommons.org/licenses/by-sa/3.0)], via Wikimedia Commons |
 
 ---++ Add-On Info
 
