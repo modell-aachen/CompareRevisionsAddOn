@@ -487,10 +487,20 @@ sub _getTree {
     $tree->implicit_body_p_tag(1);
     $tree->p_strict(1);
     $tree->ignore_unknown(0);
-    $tree->parse($text);
+
+    # wrapping text in a html structure, because implicit tags tend to destroy things
+    $tree->parse("<html><body><div>$text</div></body></html>");
     $tree->eof;
     $tree->elementify;
     $tree = $tree->find('body');
+
+    # do a fake 'implicit_p_tag'
+    my $div = $tree->find('div');
+    $div->detach();
+    my @elements = $div->detach_content;
+    @elements = map { if(ref($_)) { $_ } else { HTML::Element->new('p')->push_content($_) } } @elements;
+    $tree->push_content(@elements);
+    $div->destroy();
 
     # Remove blank paragraphs
 
