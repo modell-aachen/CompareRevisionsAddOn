@@ -23,6 +23,7 @@ use Foswiki::Store;
 use Encode           ();
 
 use HTML::TreeBuilder;
+use HTML::Element;
 use Algorithm::Diff;
 use URI::Escape;
 
@@ -31,6 +32,7 @@ my $class_add   = 'craCompareAdd';
 my $class_del   = 'craCompareDelete';
 my $class_c1    = 'craCompareChange1';
 my $class_c2    = 'craCompareChange2';
+my $protectedTags = qr/^(?:svg|map)$/;
 my $interweave;
 my $context;
 
@@ -188,6 +190,30 @@ sub compare {
     # Start the output
 
     my $output = '';
+
+    # First handle special case: image maps
+    # We need to deal with these beforehand, because they might appear in the dom after the images using them.
+    my @maps1 = $tree1->look_down('_tag' => 'map');
+    foreach my $map1 ( @maps1 ) {
+        my $id = $map1->attr('id');
+        next unless $id;
+        my $map2 = $tree2->look_down('_tag' => 'map', 'id' => $id); # we only care for the first, since a second one is non-sense anyway
+        next unless $map2;
+        next if _elementHash($map1) eq _elementHash($map2);
+
+        # ok, maps are different, lets give them different ids
+        my $newId1 = "${id}_cra1";
+        my $newId2 = "${id}_cra2";
+        $map1->attr('id', $newId1);
+        $map2->attr('id', $newId2);
+        foreach my $user ( $tree1->look_down('usemap' => "#$id") ) {
+            $user->attr('usemap', "#$newId1");
+        }
+        foreach my $user ( $tree2->look_down('usemap' => "#$id") ) {
+            $user->attr('usemap', "#$newId2");
+        }
+    }
+    undef @maps1;
 
     # Compare the trees
 
@@ -541,7 +567,8 @@ sub _findSubChanges {
 
     }
 
-    if ($e1->tag eq 'svg') {
+    # skip protected tags
+    if($e1->tag =~ m#$protectedTags#) {
         $text1 = _getTextWithClass( $e1, $class_c1 );
         $text2 = _getTextWithClass( $e2, $class_c2 );
         return $interweave ? ( $text1 . $text2, '' ) : ( $text1, $text2 );
