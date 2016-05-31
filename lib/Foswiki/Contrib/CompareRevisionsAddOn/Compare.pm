@@ -384,7 +384,13 @@ sub escapeFile {
 
     my $fileUnescaped = uri_unescape( $fileName );
     if( $fileUnescaped ne $fileName && $Foswiki::UNICODE ) {
-        $fileUnescaped = Foswiki::Store::decode( $fileUnescaped );
+        eval {
+            $fileUnescaped = Encode::decode_utf8( $fileUnescaped, Encode::FB_CROAK );
+        };
+        if ($@) {
+            # slightly insane fallback
+            $fileUnescaped = Encode::decode('Windows-1252', $fileUnescaped);
+        }
     }
 
     # File info in this version
