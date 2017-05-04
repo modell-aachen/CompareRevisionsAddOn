@@ -540,7 +540,14 @@ sub _getTree {
     my $div = $tree->find('div');
     $div->detach();
     my @elements = $div->detach_content;
-    @elements = map { if(ref($_)) { $_ } else { HTML::Element->new('p')->push_content($_) } } @elements;
+    @elements = map {
+        if(ref($_)) {
+            $_->push_content('') if($_->tag eq 'p' && $_->is_empty); # at top level we must not delete blank paragraphs
+            $_
+        } else {
+            HTML::Element->new('span')->push_content($_) # at top level everything must be an element, so we can wrap it with a marker
+        }
+    } @elements;
     $tree->push_content(@elements);
     $div->destroy();
 
