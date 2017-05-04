@@ -548,7 +548,35 @@ sub _getTree {
             HTML::Element->new('span')->push_content($_) # at top level everything must be an element, so we can wrap it with a marker
         }
     } @elements;
-    $tree->push_content(@elements);
+
+    # Wrap chains of inline elements, so they all receive the same
+    # craInterwaveDiff/td.
+    # Otherwise we would break at element boundaries.
+    my @inlineElements = (); # collect elements that need to be wrapped here
+    my @wrappedElements = (); # new list of all wrapped elements (and those that need not be wrapped)
+    # note: leaving out br, because it makes sense as a boundary for markers
+    my %isInline = map{$_ => 1} qw(b big i small tt abbr acronym cite dfn em kbd strong samp var a bdo img map object q script span sub sup button input label select textarea);
+    # will wrap all elements collected in @inlineElements and add them to @wrappedElements
+    my $wrapInlineElements = sub {
+        return unless scalar @inlineElements;
+        my $wrapper = HTML::Element->new('span');
+        $wrapper->attr('class', 'inlineWrapper');
+        push @wrappedElements, $wrapper;
+        $wrapper->push_content(@inlineElements);
+        @inlineElements = ();
+    };
+    # wrap elements...
+    for my $i (0..$#elements) {
+        if($isInline{$elements[$i]->tag}) {
+            push @inlineElements, $elements[$i];
+        } else {
+            &$wrapInlineElements();
+            push @wrappedElements, $elements[$i];
+        }
+    }
+    &$wrapInlineElements();
+
+    $tree->push_content(@wrappedElements);
     $div->destroy();
 
     # Remove blank paragraphs
