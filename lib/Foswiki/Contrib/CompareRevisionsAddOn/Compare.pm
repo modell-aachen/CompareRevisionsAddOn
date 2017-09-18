@@ -312,9 +312,11 @@ sub compare {
 
     my $revisions = "";
     my $i         = $maxrev;
+    my $skinParam = $query->param('skin');
+    $skinParam =~ s#[^a-z,]##g if $skinParam;
     while ( $i > 0 ) {
         $revisions .=
-"  <a href=\"%SCRIPTURLPATH%/view%SCRIPTSUFFIX%/%WEB%/%TOPIC%?rev=$i\">r$i</a>";
+"  <a href=\"%SCRIPTURLPATH{view}%/%WEB%/%TOPIC%?rev=$i\">r$i</a>";
 
         last
           if $i == 1
@@ -325,10 +327,10 @@ sub compare {
         }
         else {
             $revisions .=
-"  <a href=\"%SCRIPTURLPATH%/compare%SCRIPTSUFFIX%/%WEB%/%TOPIC%?rev1=$i&rev2="
+"  <a href=\"%SCRIPTURLPATH{compare}%/%WEB%/%TOPIC%?rev1=$i&rev2="
               . ( $i - 1 )
               . (
-                $query->param('skin') ? '&skin=' . $query->param('skin') : '' )
+                $skinParam ? "&skin=$skinParam" : '' )
               . (
                 $contextParam
                 ? "&context=$contextParam"
