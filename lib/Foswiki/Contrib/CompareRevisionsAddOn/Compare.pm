@@ -61,6 +61,7 @@ sub compare {
          $query->param('render')
       || &Foswiki::Func::getPreferencesValue( "COMPARERENDERSTYLE", $webName )
       || 'interweave';
+    $renderStyle =~ s#[^a-z]##g; # prevent passing down of malicious url parameters
     $interweave = $renderStyle eq 'interweave';
 
     # Check context
@@ -361,7 +362,7 @@ sub compare {
     $tree1->delete();
     $tree2 = $tree2->parent() while defined $tree2->parent();
     $tree2->delete();
-    
+
     $session->writeCompletePage( $output, 'view' );
 
 }
