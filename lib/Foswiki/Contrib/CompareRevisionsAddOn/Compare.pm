@@ -66,9 +66,9 @@ sub compare {
 
     # Check context
 
-    $context = $query->param('context');
-    $context = &Foswiki::Func::getPreferencesValue( "COMPARECONTEXT", $webName )
-      unless defined($context);
+    my $contextParam = $query->param('context');
+    $contextParam =~ s#\D##g if defined $contextParam;
+    $context = defined($contextParam) ? $contextParam : &Foswiki::Func::getPreferencesValue( "COMPARECONTEXT", $webName );
     $context = -1 unless defined($context) && $context =~ /^\d+$/;
 
     # Get Revisions. rev2 default to maxrev, rev1 to rev2-1
@@ -330,8 +330,8 @@ sub compare {
               . (
                 $query->param('skin') ? '&skin=' . $query->param('skin') : '' )
               . (
-                $query->param('context')
-                ? '&context=' . $query->param('context')
+                $contextParam
+                ? "&context=$contextParam"
                 : ''
               )
               . '&render='
