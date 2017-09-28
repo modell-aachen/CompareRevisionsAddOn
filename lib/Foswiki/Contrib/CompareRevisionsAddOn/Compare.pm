@@ -67,7 +67,7 @@ sub compare {
     # Check context
 
     my $contextParam = $query->param('context');
-    $contextParam =~ s#\D##g if defined $contextParam;
+    $contextParam =~ s#([\d-])#\1#g if defined $contextParam;
     $context = defined($contextParam) ? $contextParam : &Foswiki::Func::getPreferencesValue( "COMPARECONTEXT", $webName );
     $context = -1 unless defined($context) && $context =~ /^\d+$/;
 
