@@ -61,14 +61,12 @@ sub compare {
          $query->param('render')
       || &Foswiki::Func::getPreferencesValue( "COMPARERENDERSTYLE", $webName )
       || 'interweave';
-    $renderStyle =~ s#[^a-z]##g; # prevent passing down of malicious url parameters
     $interweave = $renderStyle eq 'interweave';
 
     # Check context
 
-    my $contextParam = $query->param('context');
-    $contextParam =~ s#([\d-])#\1#g if defined $contextParam;
-    $context = defined($contextParam) ? $contextParam : &Foswiki::Func::getPreferencesValue( "COMPARECONTEXT", $webName );
+    $context = $query->param('context');
+    $context = Foswiki::Func::getPreferencesValue( "COMPARECONTEXT", $webName ) unless defined($context);
     $context = -1 unless defined($context) && $context =~ /^\d+$/;
 
     # Get Revisions. rev2 default to maxrev, rev1 to rev2-1
@@ -310,40 +308,7 @@ sub compare {
 
     # Print remainder of document
 
-    my $revisions = "";
-    my $i         = $maxrev;
-    my $skinParam = $query->param('skin');
-    $skinParam =~ s#[^a-z,]##g if $skinParam;
-    while ( $i > 0 ) {
-        $revisions .=
-"  <a href=\"%SCRIPTURLPATH{view}%/%WEB%/%TOPIC%?rev=$i\">r$i</a>";
-
-        last
-          if $i == 1
-              || (   $Foswiki::cfg{NumberOfRevisions} > 0
-                  && $i == $maxrev - $Foswiki::cfg{NumberOfRevisions} + 1 );
-        if ( $i == $rev2 && $i - 1 == $rev1 ) {
-            $revisions .= "  &lt;";
-        }
-        else {
-            $revisions .=
-"  <a href=\"%SCRIPTURLPATH{compare}%/%WEB%/%TOPIC%?rev1=$i&rev2="
-              . ( $i - 1 )
-              . (
-                $skinParam ? "&skin=$skinParam" : '' )
-              . (
-                $contextParam
-                ? "&context=$contextParam"
-                : ''
-              )
-              . '&render='
-              . $renderStyle
-              . '">&lt;</a>';
-        }
-        $i--;
-    }
-
-    $tmpl_after =~ s/%REVISIONS%/$revisions/go;
+    $tmpl_after =~ s/%REVISIONS%/_generateRevisions($query, $maxrev, $rev1, $rev2)/ge;
     $tmpl_after =~ s/%CURRREV%/$rev1/go;
     $tmpl_after =~ s/%MAXREV%/$maxrev/go;
     $tmpl_after =~ s/%REVTITLE1%/$revtitle1/go;
@@ -367,6 +332,51 @@ sub compare {
 
     $session->writeCompletePage( $output, 'view' );
 
+}
+
+sub _generateRevisions {
+    my ($query, $maxrev, $rev1, $rev2) = @_;
+
+    my $revisions = "";
+    my $i         = $maxrev;
+    my $skinParam = $query->param('skin');
+    my $renderStyle = $query->param('render');
+    my $contextParam = $query->param('context');
+
+    if($query->param('external')) {
+        # rev1 has been set to the maxrev of the external topic
+        $rev1 = $rev2;
+    }
+
+    # prevent passing down of malicious url parameters
+    $skinParam =~ s#[^a-z,]##g if $skinParam;
+    $renderStyle =~ s#[^a-z]##g if $renderStyle;
+    $contextParam =~ s#[^\d-]##g if defined $contextParam;
+
+    while ( $i > 0 ) {
+        $revisions .=
+"  <a href=\"%SCRIPTURLPATH{view}%/%WEB%/%TOPIC%?rev=$i\">r$i</a>";
+
+        last
+          if $i == 1
+              || (   $Foswiki::cfg{NumberOfRevisions} > 0
+                  && $i == $maxrev - $Foswiki::cfg{NumberOfRevisions} + 1 );
+        if ( $i == $rev2 && $i - 1 == $rev1 ) {
+            $revisions .= "  &lt;";
+        }
+        else {
+            $revisions .=
+"  <a href=\"%SCRIPTURLPATH{compare}%/%WEB%/%TOPIC%?rev1=$i&rev2="
+              . ( $i - 1 )
+              . ( $skinParam ? "&skin=$skinParam" : '' )
+              . ( defined $contextParam ? "&context=$contextParam" : '' )
+              . ( $renderStyle ? "&render=$renderStyle" : '' )
+              . '">&lt;</a>';
+        }
+        $i--;
+    }
+
+    return $revisions;
 }
 
 # Escapes links to attachments of the current topic.
