@@ -490,11 +490,13 @@ sub _getTree {
     # Read document
 
     ( my $currentMeta, undef ) = Foswiki::Func::readTopic( $webName, $topicName ); # to check if attachments still available
+    Foswiki::UI::checkAccess( $session, 'VIEW', $currentMeta );
 
     my $text;
     if($rev) {
         ( my $meta, $text ) =
           Foswiki::Func::readTopic( $webName, $topicName, $rev );
+        Foswiki::UI::checkAccess( $session, 'VIEW', $meta );
         $session->enterContext( 'can_render_meta', $meta );
 
         # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
