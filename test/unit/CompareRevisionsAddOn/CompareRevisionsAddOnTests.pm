@@ -163,6 +163,97 @@ sub test_paramExternalRev2 {
     $this->assert($numCompares == 2, "with external parameters, it should have generated 2 compare links and one text node '<'");
 }
 
+# Test if...
+# ... the user can not compare topics, he has no VIEW access to
+sub test_checkAclsCurrentTopicDenied {
+    my ( $this ) = @_;
+
+    my $topic = 'SecretTopic';
+
+    my ($meta, $text) = Foswiki::Func::readTopic($this->{test_web}, $topic);
+    $meta->text("   * Set ALLOWTOPICVIEW = AdminGroup");
+    $meta->saveAs();
+
+    my $cliParams = { topic => "$this->{test_web}.$topic", action => 'compare' };
+    $query = Unit::Request->new( $cliParams );
+    my $session = $this->createNewFoswikiSession($this->{test_user_login}, $query);
+
+    try {
+        my $UI_FN = $this->getUIFn('compare');
+        my ($response) = $this->capture( $UI_FN, $this->{session} );
+
+        $this->assert(0, "Test user $this->{test_user_login} was able to compare secret topic.");
+    } catch Foswiki::AccessControlException with {
+    };
+}
+
+# Test if...
+# ... the user can NOT compare topics, he has no VIEW access to in a specific revision
+# ... the user CAN compare revs, where the restrictions have been lifted
+sub test_checkAclsCurrentTopicRev {
+    my ( $this ) = @_;
+
+    my $topic = 'SecretTopic';
+
+    my ($meta) = Foswiki::Func::readTopic($this->{test_web}, $topic);
+    $meta->text("   * Set ALLOWTOPICVIEW = AdminGroup");
+    $meta->saveAs($meta->web, $meta->topic, forcenewrevision => 1);
+    $meta->text("No acls");
+    $meta->saveAs($meta->web, $meta->topic, forcenewrevision => 1);
+    $meta->text("Still no acls");
+    $meta->saveAs($meta->web, $meta->topic, forcenewrevision => 1);
+
+    # comparing the latest revs should be allowed
+
+    my $cliParams = { topic => "$this->{test_web}.$topic", action => 'compare', rev1 => 2, rev2 => 3 };
+    $query = Unit::Request->new( $cliParams );
+    my $session = $this->createNewFoswikiSession($this->{test_user_login}, $query);
+
+    try {
+        my $UI_FN = $this->getUIFn('compare');
+        my ($response) = $this->capture( $UI_FN, $this->{session} );
+    } catch Foswiki::AccessControlException with {
+        $this->assert(0, "Test user $this->{test_user_login} was NOT able to compare secret topic revs he was granted access to.");
+    };
+
+    # comparing with the first rev should NOT be allowed
+
+    $cliParams = { topic => "$this->{test_web}.$topic", action => 'compare', rev1 => 1, rev2 => 2 };
+    $query = Unit::Request->new( $cliParams );
+    $session = $this->createNewFoswikiSession($this->{test_user_login}, $query);
+
+    try {
+        my $UI_FN = $this->getUIFn('compare');
+        my ($response) = $this->capture( $UI_FN, $this->{session} );
+
+        $this->assert(0, "Test user $this->{test_user_login} was able to compare secret rev of secret topic.");
+    } catch Foswiki::AccessControlException with {
+    };
+}
+
+# Test if...
+# ... the user can compare the topic, if he has VIEW access to it
+sub test_checkAclsCurrentTopicAllowed {
+    my ( $this ) = @_;
+
+    my $topic = 'SecretTopic';
+
+    my ($meta, $text) = Foswiki::Func::readTopic($this->{test_web}, $topic);
+    $meta->text("   * Set ALLOWTOPICVIEW = $this->{test_user_login}");
+    $meta->saveAs();
+
+    my $cliParams = { topic => "$this->{test_web}.$topic", action => 'compare' };
+    $query = Unit::Request->new( $cliParams );
+    my $session = $this->createNewFoswikiSession($this->{test_user_login}, $query);
+
+    try {
+        my $UI_FN = $this->getUIFn('compare');
+        my ($response) = $this->capture( $UI_FN, $this->{session} );
+    } catch Foswiki::AccessControlException with {
+        $this->assert(0, "Test user $this->{test_user_login} was NOT able to compare secret topic he was granted access to.");
+    };
+}
+
 1;
 __END__
 Foswiki - The Free and Open Source Wiki, http://foswiki.org/
