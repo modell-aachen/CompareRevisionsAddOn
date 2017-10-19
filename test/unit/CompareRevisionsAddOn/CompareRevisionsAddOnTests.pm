@@ -13,6 +13,7 @@ use warnings;
 use Foswiki();
 use Error qw ( :try );
 use Foswiki::Contrib::CompareRevisionsAddOn::Compare();
+use HTML::Element;
 
 use Test::MockModule;
 
@@ -252,6 +253,77 @@ sub test_checkAclsCurrentTopicAllowed {
     } catch Foswiki::AccessControlException with {
         $this->assert(0, "Test user $this->{test_user_login} was NOT able to compare secret topic he was granted access to.");
     };
+}
+
+# Test if...
+# ...non-alpha-numeric characters get escaped.
+sub test_addIgnoreEscapes {
+    my ($this) = @_;
+
+    my $text = "-my \x{2603} can be ignored-";
+    my $escaped = Foswiki::Contrib::CompareRevisionsAddOn::Compare::addIgnoreMarker($text);
+    $this->assert($escaped eq '__craIgnore_45my_32_9731_32can_32be_32ignored_45-', "Failed to escape snowman sentece. Result: '$escaped'");
+}
+
+# Test if...
+# ...escaped characters get reverted correctly.
+# ...even non-ascii chars.
+sub test_addIgnoreUnescapes {
+    my ($this) = @_;
+
+    my $text = 'Some text __craIgnore_45my_32_9731_32can_32be_32ignored_45- more text.';
+    Foswiki::Contrib::CompareRevisionsAddOn::Compare::restoreIgnored(\$text);
+    $this->assert($text eq "Some text -my \x{2603} can be ignored- more text.", "Failed to restore snowman senteces. Result: '$text'");
+}
+
+# Test if...
+# ... the hash function ignores ignored sequences.
+sub test_hashIgnoresIgnored {
+    my ($this) = @_;
+
+    my $textA = '<span>Please ignore __craIgnorethis- text.</span>';
+    my $textB = '<span>Please ignore __craIgnorethat- text.</span>';
+
+    $this->assert(Foswiki::Contrib::CompareRevisionsAddOn::Compare::_elementHash($textA) eq Foswiki::Contrib::CompareRevisionsAddOn::Compare::_elementHash($textB), "Ignored text was not omitted");
+}
+
+# Test if...
+# ...the attribute comparer ignores ignored sequences.
+sub test_ignoreIgnoredAttribs {
+    my ($this) = @_;
+
+    my $attribA = Foswiki::Contrib::CompareRevisionsAddOn::Compare::addIgnoreMarker("AttribA");
+    my $attribB = Foswiki::Contrib::CompareRevisionsAddOn::Compare::addIgnoreMarker("AttribB");
+    my $elementA = HTML::Element->new('span');
+    $elementA->attr('class', $attribA);
+    my $elementB = HTML::Element->new('span');
+    $elementB->attr('class', $attribB);
+
+    $this->assert(Foswiki::Contrib::CompareRevisionsAddOn::Compare::_haveSameAttribs($elementA, $elementB), "Ignored attribs where not omitted");
+}
+
+# Test if...
+# ...twisty internal will be marked as ignored.
+sub test_twistiesGetIgnoreMarkers {
+    my ($this) = @_;
+
+    my $html = <<HTML;
+<div class="twistyPlugin">
+    <span class="twistyRememberSetting twistyTrigger foswikiUnvisited twistyInited0" id="Twisty1show" style="">
+        <a class="" href="#"><span class="foswikiLinkLabel foswikiUnvisited">More...</span></a>
+    </span>
+    <span class="twistyRememberSetting twistyTrigger foswikiUnvisited twistyInited0" id="Twisty1hide" style="display:none">
+        <a class="" href="#"><span class="foswikiLinkLabel foswikiUnvisited">Hide</span></a>
+    </span>
+</div>
+HTML
+
+    my $tree = Foswiki::Contrib::CompareRevisionsAddOn::Compare::_htmlToTree($html);
+    Foswiki::Contrib::CompareRevisionsAddOn::Compare::_addIgnoreMarkersToTwisties($tree);
+
+    my $escapedHtml = $tree->as_HTML('<>&');
+    my $cleanedEscapedHtml = $escapedHtml =~ s#__craIgnore[[:alnum:]_]*-##gr;
+    $this->assert($cleanedEscapedHtml !~ m#twisty#i, "Some twisty attributes where not escaped: $escapedHtml");
 }
 
 1;

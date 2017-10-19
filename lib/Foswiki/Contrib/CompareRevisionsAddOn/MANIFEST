@@ -5,7 +5,9 @@ lib/Foswiki/Plugins/CompareRevisionsAddonPlugin.pm 0444
 lib/Foswiki/Contrib/CompareRevisionsAddOn.pm 0444
 lib/Foswiki/Contrib/CompareRevisionsAddOn/Compare.pm 0444
 lib/Foswiki/Contrib/CompareRevisionsAddOn/Config.spec 0444
+pub/System/CompareRevisionsAddOn/compare_view.js 0644
 pub/System/CompareRevisionsAddOn/interweave.png 0644
+pub/System/CompareRevisionsAddOn/jsi18n.compare.de.js 0644
 pub/System/CompareRevisionsAddOn/sidebyside.png 0644
 pub/System/CompareRevisionsAddOn/Keep_tidy_ask.svg 0644
 pub/System/CompareRevisionsAddOn/Keep_tidy_ask_en.svg 0644
