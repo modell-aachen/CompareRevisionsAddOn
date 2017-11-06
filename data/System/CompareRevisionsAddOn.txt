@@ -20,8 +20,6 @@ The differences may be shown in two formats, either side-by-side or as an interw
    * Screenshot of side-by-side output: <br />
      <div class="twikiImage"><img src="%ATTACHURLPATH%/sidebyside.png" alt="sidebyside.png" width='582' height='565' /></div>
 
-These screenshots have been taken from Sandbox.CompareRevisionsAddOnDemoTopic.
-
 The appearance can be affected by templates and skins.
 
 ---++ Usage
@@ -147,13 +145,10 @@ __Note:__ You do not need to install anything on the browser to use this add-on.
      | ==data/System/CompareRevisionsAddonPlugin.txt== | Plugin topic |
      | ==pub/System/CompareRevisionsAddOn/interweaved.png== | Interwoven screenshot |
      | ==pub/System/CompareRevisionsAddOn/sidebyside.png== | Side-by-side screenshot |
-     | ==data/Sandbox/CompareRevisionsAddOnDemoTopic.txt== | Demonstration topic |
-     | ==data/Sandbox/CompareRevisionsAddOnDemoTopic.txt,v== | Demonstration topic history |
 
    * Test if the installation was successful:%BR%
      Call ==%<nop>SCRIPTURL%/compare/Web/Topic== with
-     some existing topic. (Try for instance Sandbox.CompareRevisionsAddOnDemoTopic and 
-     compare your output with above screenshots).
+     some existing topic.
 
    * Enable the helper plugin CompareRevisionsAddonPlugin with the configure script
    * This plugin will support the HistoryPlugin, if it is enabled

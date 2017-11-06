@@ -21,6 +21,7 @@ use Foswiki::Func    ();
 use Foswiki::Plugins ();
 use Foswiki::Store;
 use Encode           ();
+use Foswiki::Plugins::JSi18nPlugin;
 
 use HTML::TreeBuilder;
 use HTML::Element;
@@ -33,6 +34,8 @@ my $class_del   = 'craCompareDelete';
 my $class_c1    = 'craCompareChange1';
 my $class_c2    = 'craCompareChange2';
 my $protectedTags = qr/^(?:svg|map)$/;
+my $craIgnoreToBeEscapedChars = qr/[^[:alnum:]]/; # these chars will be escaped when marked to be ignored
+my $craIgnoreEscapeeChars = qr/[[:alnum:]_]/; # these can occur in an escaped sequence
 my $interweave;
 my $context;
 
@@ -40,6 +43,11 @@ sub compare {
     my $session = shift;
 
     $Foswiki::Plugins::SESSION = $session;
+
+    Foswiki::Func::addToZone('script', 'CompareView', <<'SCRIPT', 'JQUERYPLUGIN::FOSWIKI');
+<script type='text/javascript' src='%PUBURLPATH%/%SYSTEMWEB%/CompareRevisionsAddOn/compare_view.js?version=%QUERYVERSION{"CompareRevisionsAddOn"}%'></script>
+SCRIPT
+    Foswiki::Plugins::JSi18nPlugin::JSI18N($session, 'CompareRevisionsAddOn', 'compare');
 
     my $query   = $session->{request};
     my $webName = $session->{webName};
@@ -66,8 +74,7 @@ sub compare {
     # Check context
 
     $context = $query->param('context');
-    $context = &Foswiki::Func::getPreferencesValue( "COMPARECONTEXT", $webName )
-      unless defined($context);
+    $context = Foswiki::Func::getPreferencesValue( "COMPARECONTEXT", $webName ) unless defined($context);
     $context = -1 unless defined($context) && $context =~ /^\d+$/;
 
     # Get Revisions. rev2 default to maxrev, rev1 to rev2-1
@@ -295,6 +302,8 @@ sub compare {
         unescapeFile(\$text1, $escapeFileUrls2);
         unescapeFile(\$text2, $escapeFileUrls2);
         unescapeFile(\$text2, $escapeFileUrls1);
+        restoreIgnored(\$text1);
+        restoreIgnored(\$text2);
 
         # Do the replacement of %TEXT1% and %TEXT2% simultaneously
         # to prevent difficulties with text containing '%TEXT2%'
@@ -309,38 +318,7 @@ sub compare {
 
     # Print remainder of document
 
-    my $revisions = "";
-    my $i         = $maxrev;
-    while ( $i > 0 ) {
-        $revisions .=
-"  <a href=\"%SCRIPTURLPATH%/view%SCRIPTSUFFIX%/%WEB%/%TOPIC%?rev=$i\">r$i</a>";
-
-        last
-          if $i == 1
-              || (   $Foswiki::cfg{NumberOfRevisions} > 0
-                  && $i == $maxrev - $Foswiki::cfg{NumberOfRevisions} + 1 );
-        if ( $i == $rev2 && $i - 1 == $rev1 ) {
-            $revisions .= "  &lt;";
-        }
-        else {
-            $revisions .=
-"  <a href=\"%SCRIPTURLPATH%/compare%SCRIPTSUFFIX%/%WEB%/%TOPIC%?rev1=$i&rev2="
-              . ( $i - 1 )
-              . (
-                $query->param('skin') ? '&skin=' . $query->param('skin') : '' )
-              . (
-                $query->param('context')
-                ? '&context=' . $query->param('context')
-                : ''
-              )
-              . '&render='
-              . $renderStyle
-              . '">&lt;</a>';
-        }
-        $i--;
-    }
-
-    $tmpl_after =~ s/%REVISIONS%/$revisions/go;
+    $tmpl_after =~ s/%REVISIONS%/_generateRevisions($query, $maxrev, $rev1, $rev2)/ge;
     $tmpl_after =~ s/%CURRREV%/$rev1/go;
     $tmpl_after =~ s/%MAXREV%/$maxrev/go;
     $tmpl_after =~ s/%REVTITLE1%/$revtitle1/go;
@@ -361,9 +339,54 @@ sub compare {
     $tree1->delete();
     $tree2 = $tree2->parent() while defined $tree2->parent();
     $tree2->delete();
-    
+
     $session->writeCompletePage( $output, 'view' );
 
+}
+
+sub _generateRevisions {
+    my ($query, $maxrev, $rev1, $rev2) = @_;
+
+    my $revisions = "";
+    my $i         = $maxrev;
+    my $skinParam = $query->param('skin');
+    my $renderStyle = $query->param('render');
+    my $contextParam = $query->param('context');
+
+    if($query->param('external')) {
+        # rev1 has been set to the maxrev of the external topic
+        $rev1 = $rev2;
+    }
+
+    # prevent passing down of malicious url parameters
+    $skinParam =~ s#[^a-z,]##g if $skinParam;
+    $renderStyle =~ s#[^a-z]##g if $renderStyle;
+    $contextParam =~ s#[^\d-]##g if defined $contextParam;
+
+    while ( $i > 0 ) {
+        $revisions .=
+"  <a href=\"%SCRIPTURLPATH{view}%/%WEB%/%TOPIC%?rev=$i\">r$i</a>";
+
+        last
+          if $i == 1
+              || (   $Foswiki::cfg{NumberOfRevisions} > 0
+                  && $i == $maxrev - $Foswiki::cfg{NumberOfRevisions} + 1 );
+        if ( $i == $rev2 && $i - 1 == $rev1 ) {
+            $revisions .= "  &lt;";
+        }
+        else {
+            $revisions .=
+"  <a href=\"%SCRIPTURLPATH{compare}%/%WEB%/%TOPIC%?rev1=$i&rev2="
+              . ( $i - 1 )
+              . ( $skinParam ? "&skin=$skinParam" : '' )
+              . ( defined $contextParam ? "&context=$contextParam" : '' )
+              . ( $renderStyle ? "&render=$renderStyle" : '' )
+              . '">&lt;</a>';
+        }
+        $i--;
+    }
+
+    return $revisions;
 }
 
 # Escapes links to attachments of the current topic.
@@ -468,6 +491,20 @@ sub unescapeFile {
     }
 }
 
+# Any text/attributes having this marker will be ignored when comparing.
+sub addIgnoreMarker {
+    my ( $text ) = @_;
+
+    $text =~ s#($craIgnoreToBeEscapedChars)#'_' . ord($1)#ge;
+    return "__craIgnore$text-"; # Note: trailing '-' marks the end of the escape
+}
+
+sub restoreIgnored {
+    my ( $textRef ) = @_;
+
+    $$textRef =~ s#__craIgnore($craIgnoreEscapeeChars*)-# $1 =~ s/_(\d*)/chr($1)/ger #ge;
+}
+
 sub _getTree {
 
     # Purpose: Get the rendered version of a document as HTML tree
@@ -477,11 +514,13 @@ sub _getTree {
     # Read document
 
     ( my $currentMeta, undef ) = Foswiki::Func::readTopic( $webName, $topicName ); # to check if attachments still available
+    Foswiki::UI::checkAccess( $session, 'VIEW', $currentMeta );
 
     my $text;
     if($rev) {
         ( my $meta, $text ) =
           Foswiki::Func::readTopic( $webName, $topicName, $rev );
+        Foswiki::UI::checkAccess( $session, 'VIEW', $meta );
         $session->enterContext( 'can_render_meta', $meta );
 
         # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
@@ -525,13 +564,33 @@ sub _getTree {
 
     # Generate tree
 
+    my $tree = _htmlToTree($text);
+
+    # Do the quirks
+
+    # Remove blank paragraphs
+    $_->delete foreach (
+        $tree->look_down(
+            '_tag' => 'p',
+            sub { $_[0]->is_empty }
+        )
+    );
+
+    _addIgnoreMarkersToTwisties($tree);
+
+    return $tree;
+}
+
+sub _htmlToTree {
+    my ($html) = @_;
+
     my $tree = new HTML::TreeBuilder;
     $tree->implicit_body_p_tag(1);
     $tree->p_strict(1);
     $tree->ignore_unknown(0);
 
     # wrapping text in a html structure, because implicit tags tend to destroy things
-    $tree->parse("<html><body><div>$text</div></body></html>");
+    $tree->parse("<html><body><div>$html</div></body></html>");
     $tree->eof;
     $tree->elementify;
     $tree = $tree->find('body');
@@ -579,16 +638,23 @@ sub _getTree {
     $tree->push_content(@wrappedElements);
     $div->destroy();
 
-    # Remove blank paragraphs
-
-    $_->delete foreach (
-        $tree->look_down(
-            '_tag' => 'p',
-            sub { $_[0]->is_empty }
-        )
-    );
-
     return $tree;
+}
+
+sub _addIgnoreMarkersToTwisties {
+    my ($tree) = @_;
+
+    foreach my $twisty ($tree->look_down('class', qr/\btwisty/)) {
+        foreach my $attr(qw( id style ) ) {
+            my $value = $twisty->attr($attr);
+            next unless $value;
+            $twisty->attr($attr, addIgnoreMarker($value));
+        }
+
+        my $class = $twisty->attr('class');
+        $class =~ s#\b(twisty.*?)\b#addIgnoreMarker($1)#ge;
+        $twisty->attr('class', $class);
+    }
 }
 
 sub _findSubChanges {
@@ -702,9 +768,13 @@ sub _haveSameAttribs {
             # Do not mark as change, when a table row becomes odd/even or sorting changed
             # XXX dublicated in _elementHash
             if($attr eq 'class') {
-                $attrOfE1 =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
-                $attrOfE2 =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+                $attrOfE1 =~ s#\b(?:foswikiTable(?:Odd|Even|RowdataBgSorted\d*|RowdataBg\d*))##g;
+                $attrOfE2 =~ s#\b(?:foswikiTable(?:Odd|Even|RowdataBgSorted\d*|RowdataBg\d*))##g;
             }
+
+            # XXX dublicated in _elementHash
+            $attrOfE1 =~ s#__craIgnore$craIgnoreEscapeeChars*-##;
+            $attrOfE2 =~ s#__craIgnore$craIgnoreEscapeeChars*-##;
 
             return 0 if $attrOfE1 ne $attrOfE2;
         }
@@ -729,8 +799,9 @@ sub _elementHash {
     $text =~ s%(\<a href="[^"]*sortcol=\d+(?:\&|\&amp;|;))table=\d+%$1%g;
 
     # Do not mark as change, when a table row becomes odd/even or sorting changed
+    # Ignore ignored parts.
     # XXX dublicated in _haveSameAttribs
-    $text =~ s#foswikiTableOdd|foswikiTableEven|foswikiTableRowdataBgSorted\d*|foswikiTableRowdataBg\d*##g;
+    $text =~ s#\bfoswikiTable(?:Odd|Even|RowdataBgSorted\d*|RowdataBg\d*)|__craIgnore$craIgnoreEscapeeChars*-##g;
 
     return $text;
 }
