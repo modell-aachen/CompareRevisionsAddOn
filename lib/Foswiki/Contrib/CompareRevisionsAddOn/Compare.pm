@@ -523,9 +523,8 @@ sub _getTree {
         Foswiki::UI::checkAccess( $session, 'VIEW', $meta );
         $session->enterContext( 'can_render_meta', $meta );
 
-        # XXX workaround for marking style="width: 10px" vs style="width: 10px;" as change
-        $text =~ s#style="([^"]*[^";])"#style="$1;"#g;
-        $text =~ s#style='([^']*[^';])'#style='$1;'#g;
+        # match style="..." or style='...'
+        $text =~ s#(style=(["']).*?\2)#_cleanStyle($1)#ge;
 
         $text =~ s#(?<=")(\%ATTACHURL(?:PATH)?\%/)([^"]+)(?=")#escapeFile($escapes, $meta, $1, $2, 1, $currentMeta)#ge;
         $text =~ s#(?<=')(\%ATTACHURL(?:PATH)?\%/)([^']+)(?=')#escapeFile($escapes, $meta, $1, $2, 1, $currentMeta)#ge;
@@ -579,6 +578,23 @@ sub _getTree {
     _addIgnoreMarkersToTwisties($tree);
 
     return $tree;
+}
+
+# workarounds to avoid highlighting style-formatting differences as changes
+sub _cleanStyle {
+    my ($style) = @_; # style attribute
+
+    # whitespaces:
+    # width: 5% vs width:5% and width:5%; height:5% vs width:5%;height:5% while protecting e.g. border:1px solid #ccc;
+    $style =~ s#\s*([:;])\s*#$1#g;
+
+    # trailing ;
+    # style="width: 10px" vs style="width: 10px;"
+    if( $style !~ /style=(['"]).*?;\1/ ){
+        $style =~ s#style=(['"])(.*?)\1#style=$1$2;$1#;
+    }
+
+    return $style;
 }
 
 sub _htmlToTree {
