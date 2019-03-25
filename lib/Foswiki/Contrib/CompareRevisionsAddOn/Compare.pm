@@ -22,6 +22,7 @@ use Foswiki::Plugins ();
 use Foswiki::Store;
 use Encode           ();
 use Foswiki::Plugins::JSi18nPlugin;
+use Foswiki::Plugins::ModacHelpersPlugin;
 
 use HTML::TreeBuilder;
 use HTML::Element;
@@ -452,16 +453,9 @@ sub escapeFile {
     $link = Foswiki::Func::expandCommonVariables($link, $meta->topic(), $meta->web(), $meta) if $expand;
     if(not (defined $currentInfo && defined $currentInfo->{date})) {
         # attachment has been deleted, show a placeholder
-        my $placeholders = $Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{placeholders};
-        my $placeholder;
-        foreach my $regex ( keys %$placeholders ) {
-            if($fileUnescaped =~ m#$regex#) {
-                $placeholder = $placeholders->{$regex};
-                last;
-            }
+        if($fileUnescaped =~ m#\.(?:img|jpe?g|png|bmp|svg)$#i) {
+            $link = Foswiki::Func::getPubUrlPath(Foswiki::Plugins::ModacHelpersPlugin::getDeletedImagePlaceholder());
         }
-        $placeholder = Foswiki::Func::expandCommonVariables($placeholder, $meta->topic(), $meta->web(), $meta) if $placeholder;
-        $link = $placeholder if $placeholder;
     } elsif (defined $info->{version}) {
         if($link =~ m#\?#) {
             if($link =~ m#\?.*?(;|&)#) {
