@@ -551,6 +551,7 @@ sub _getTree {
     # Modac: better SVG integration
     # HTML::TreeBuilder fails to parse SVG (used in flowcharts) due to
     # self-closing tags elements DEFS, RECT and PATH.
+    $text =~ s#(<ellipse[^</]*)(/>)#$1></ellipse>#g;
     $text =~ s#(<defs[^</]*)(/>)#$1></defs>#g;
     $text =~ s#(<rect[^</]*)(/>)#$1></rect>#g;
     $text =~ s#(<path[^</]*)(/>)#$1></path>#g;

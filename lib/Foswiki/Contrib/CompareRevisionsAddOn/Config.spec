@@ -11,6 +11,6 @@ $Foswiki::cfg{SwitchBoard}{compare} = {
     };
 # **STRING**
 # Define the skin to render the topic contents.
-$Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{skin} = 'classic';
+$Foswiki::cfg{Extensions}{CompareRevisionsAddOn}{skin} = 'custom,modaccompare,contextmenu,kvp,modac';
 
 1;
